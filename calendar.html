@@ -51,6 +51,7 @@
   button, input, textarea, select { font: inherit; color: inherit; }
 
   .app { display: flex; flex-direction: column; height: 100vh; }
+  .app[hidden] { display: none; }
 
   /* ---------- Top bar ---------- */
   .topbar {
@@ -249,15 +250,121 @@
 
   .hint { color: var(--text-3); font-size: 11.5px; text-align: right; padding: 0 16px 8px; }
 
+  /* ---------- 로그인 / 회원가입 ---------- */
+  .auth {
+    position: fixed; inset: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+    background:
+      radial-gradient(900px 500px at 12% -10%, var(--accent-soft), transparent 60%),
+      radial-gradient(700px 460px at 100% 110%, var(--accent-soft), transparent 60%),
+      var(--bg);
+    overflow-y: auto;
+  }
+  .auth[hidden] { display: none; }
+  .auth-card {
+    width: 100%; max-width: 380px;
+    background: var(--surface); border: 1px solid var(--border-soft);
+    border-radius: 16px; box-shadow: var(--shadow); padding: 26px 24px 22px;
+  }
+  .auth-brand { display: flex; align-items: center; gap: 8px; font-size: 22px; font-weight: 600; }
+  .auth-sub { color: var(--text-2); margin: 6px 0 18px; font-size: 13px; }
+
+  .tabs {
+    display: flex; gap: 4px; background: var(--surface-2);
+    border-radius: 999px; padding: 4px; margin-bottom: 18px;
+  }
+  .tabs button {
+    flex: 1; border: none; background: transparent; color: var(--text-2);
+    padding: 8px 10px; border-radius: 999px; cursor: pointer; font-weight: 500;
+  }
+  .tabs button[aria-selected="true"] {
+    background: var(--surface); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.14);
+  }
+
+  .auth form { display: flex; flex-direction: column; gap: 13px; }
+  .auth form[hidden] { display: none; }
+  .auth .btn.primary { width: 100%; justify-content: center; padding: 11px 18px; margin-top: 3px; }
+  .auth .btn.primary:disabled { opacity: .6; cursor: default; }
+  .auth .error { min-height: 18px; line-height: 1.4; }
+  .auth-foot { margin-top: 14px; color: var(--text-3); font-size: 11.5px; line-height: 1.55; }
+
+  /* 사용자 칩 */
+  .userchip {
+    display: flex; align-items: center; gap: 8px;
+    border: 1px solid var(--border); border-radius: 999px; padding: 4px 6px 4px 4px;
+  }
+  .avatar {
+    width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: #fff;
+    display: grid; place-items: center; font-size: 12px; font-weight: 700; flex: none;
+  }
+  @media (prefers-color-scheme: dark) { .avatar { color: #17181a; } }
+  .userchip .who { font-size: 13px; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .userchip .out { border: none; background: transparent; color: var(--text-2); cursor: pointer; font-size: 12px; padding: 4px 8px; border-radius: 999px; }
+  .userchip .out:hover { background: var(--surface-2); color: var(--text); }
+
   @media (max-width: 900px) {
     .sidebar { display: none; }
     .search { display: none; }
     .brand span { display: none; }
+    .userchip .who { display: none; }
   }
 </style>
 </head>
 <body>
-<div class="app">
+<!-- 로그인 / 회원가입 -->
+<div class="auth" id="authScreen">
+  <div class="auth-card">
+    <div class="auth-brand"><span>📅</span><span>캘린더</span></div>
+    <p class="auth-sub" id="authSub">내 일정을 안전하게 나만의 공간에서 관리하세요.</p>
+
+    <div class="tabs" role="tablist">
+      <button type="button" id="tabLogin" role="tab" aria-selected="true">로그인</button>
+      <button type="button" id="tabSignup" role="tab" aria-selected="false">회원가입</button>
+    </div>
+
+    <!-- 로그인 -->
+    <form id="loginForm" autocomplete="on">
+      <div class="field">
+        <label for="li-id">아이디</label>
+        <input class="input" id="li-id" name="username" autocomplete="username" maxlength="20" required />
+      </div>
+      <div class="field">
+        <label for="li-pw">비밀번호</label>
+        <input class="input" id="li-pw" name="password" type="password" autocomplete="current-password" required />
+      </div>
+      <label class="check"><input type="checkbox" id="li-keep" checked /> 로그인 상태 유지</label>
+      <div class="error" id="li-error"></div>
+      <button class="btn primary" type="submit">로그인</button>
+    </form>
+
+    <!-- 회원가입 -->
+    <form id="signupForm" autocomplete="on" hidden>
+      <div class="field">
+        <label for="su-id">아이디</label>
+        <input class="input" id="su-id" name="username" autocomplete="username" maxlength="20"
+               placeholder="영문·숫자·밑줄 3~20자" required />
+      </div>
+      <div class="field">
+        <label for="su-pw">비밀번호</label>
+        <input class="input" id="su-pw" name="password" type="password" autocomplete="new-password"
+               placeholder="6자 이상" required />
+      </div>
+      <div class="field">
+        <label for="su-pw2">비밀번호 확인</label>
+        <input class="input" id="su-pw2" name="password2" type="password" autocomplete="new-password" required />
+      </div>
+      <div class="error" id="su-error"></div>
+      <button class="btn primary" type="submit">가입하고 시작하기</button>
+    </form>
+
+    <p class="auth-foot">
+      계정과 일정은 이 브라우저에만 저장됩니다. 다른 기기와 동기화되지 않으며,
+      브라우저 데이터를 지우면 함께 삭제됩니다. 중요한 비밀번호는 사용하지 마세요.
+    </p>
+  </div>
+</div>
+
+<div class="app" id="app" hidden>
   <div class="topbar">
     <div class="brand"><span class="logo">📅</span><span>캘린더</span></div>
     <button class="btn" id="todayBtn">오늘</button>
@@ -270,6 +377,11 @@
       <input id="search" type="search" placeholder="일정 검색" />
     </div>
     <button class="btn primary" id="createBtn">＋ 만들기</button>
+    <div class="userchip">
+      <span class="avatar" id="userAvatar"></span>
+      <span class="who" id="userName"></span>
+      <button class="out" id="logoutBtn" type="button">로그아웃</button>
+    </div>
   </div>
 
   <div class="body">
@@ -366,7 +478,10 @@
   "use strict";
 
   // ---------- 상수 ----------
-  const STORE_KEY = "simple-calendar-events-v1";
+  const LEGACY_STORE_KEY = "simple-calendar-events-v1";        // 로그인 도입 이전 데이터
+  const USERS_KEY = "simple-calendar-users-v1";
+  const SESSION_KEY = "simple-calendar-session-v1";
+  const storeKeyFor = (id) => `${LEGACY_STORE_KEY}:${id}`;
   const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
   const COLORS = [
     { id: "blue",     hex: "#1a73e8", name: "블루" },
@@ -407,7 +522,8 @@
   // uid 는 load()/seed() 보다 먼저 필요하므로 호이스팅되는 함수 선언으로 둔다.
   function uid() { return Math.random().toString(36).slice(2, 10); }
 
-  let events = load();
+  let currentUser = null;               // 로그인한 사용자 아이디 (소문자 정규화)
+  let events = [];
   let viewDate = new Date();            // 큰 달력이 보여주는 달
   let miniDate = new Date();            // 미니 달력이 보여주는 달
   let selectedKey = todayKey();
@@ -416,14 +532,19 @@
   let formColor = "blue";
 
   function load() {
+    if (!currentUser) return [];
     try {
-      const raw = localStorage.getItem(STORE_KEY);
-      if (raw) return JSON.parse(raw);
+      const raw = localStorage.getItem(storeKeyFor(currentUser));
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed;
+      }
     } catch (e) { /* 저장소를 못 읽으면 새로 시작 */ }
     return seed();
   }
   function save() {
-    try { localStorage.setItem(STORE_KEY, JSON.stringify(events)); } catch (e) {}
+    if (!currentUser) return;
+    try { localStorage.setItem(storeKeyFor(currentUser), JSON.stringify(events)); } catch (e) {}
   }
   function seed() {
     const t = todayKey();
@@ -742,6 +863,7 @@
 
   // ---------- 단축키 ----------
   document.addEventListener("keydown", (ev) => {
+    if (!currentUser) return;           // 로그인 화면에서는 단축키를 받지 않는다
     const openBd = document.querySelector(".backdrop.open");
     if (ev.key === "Escape" && openBd) { close(openBd); return; }
     if (openBd) {
@@ -760,7 +882,227 @@
     else if (ev.key === "n" || ev.key === "ㅜ") { ev.preventDefault(); openEdit(null, selectedKey); }
   });
 
-  render();
+  // ---------- 계정 저장소 ----------
+  // 계정은 이 브라우저의 localStorage 에만 저장된다. 서버 인증이 아니므로
+  // 로컬 데이터를 분리해 주는 용도이지, 기기를 공유하는 사람으로부터 지켜 주지는 못한다.
+  function loadUsers() {
+    try {
+      const raw = localStorage.getItem(USERS_KEY);
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (parsed && typeof parsed === "object") return parsed;
+    } catch (e) {}
+    return {};
+  }
+  function saveUsers(users) {
+    try { localStorage.setItem(USERS_KEY, JSON.stringify(users)); return true; }
+    catch (e) { return false; }
+  }
+
+  const toHex = (buf) =>
+    Array.from(new Uint8Array(buf)).map((b) => pad(b.toString(16))).join("");
+
+  function randomSalt() {
+    const a = new Uint8Array(16);
+    if (window.crypto && crypto.getRandomValues) crypto.getRandomValues(a);
+    else for (let i = 0; i < a.length; i++) a[i] = Math.floor(Math.random() * 256);
+    return toHex(a.buffer);
+  }
+
+  const PBKDF2_ITER = 120000;
+
+  // 보안 컨텍스트(https/localhost)에서는 PBKDF2, file:// 처럼 crypto.subtle 이 없는
+  // 환경에서는 반복 해시로 대체한다. 대체 방식은 강도가 훨씬 약하다.
+  async function hashPassword(password, salt) {
+    if (window.crypto && crypto.subtle) {
+      const enc = new TextEncoder();
+      const keyMaterial = await crypto.subtle.importKey(
+        "raw", enc.encode(password), "PBKDF2", false, ["deriveBits"]
+      );
+      const bits = await crypto.subtle.deriveBits(
+        { name: "PBKDF2", salt: enc.encode(salt), iterations: PBKDF2_ITER, hash: "SHA-256" },
+        keyMaterial, 256
+      );
+      return { algo: "PBKDF2-SHA256", hash: toHex(bits) };
+    }
+    let h1 = 0x811c9dc5, h2 = 0x01000193;
+    const s = salt + " " + password;
+    for (let round = 0; round < 5000; round++) {
+      for (let i = 0; i < s.length; i++) {
+        h1 = Math.imul(h1 ^ s.charCodeAt(i), 16777619) >>> 0;
+        h2 = Math.imul(h2 + s.charCodeAt(i) + round, 2246822519) >>> 0;
+      }
+    }
+    return { algo: "fallback-v1", hash: pad(h1.toString(16)) + pad(h2.toString(16)) };
+  }
+
+  // 길이가 달라도 조기 반환하지 않는 비교
+  function safeEqual(a, b) {
+    if (typeof a !== "string" || typeof b !== "string") return false;
+    let diff = a.length ^ b.length;
+    for (let i = 0; i < Math.max(a.length, b.length); i++) {
+      diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
+    }
+    return diff === 0;
+  }
+
+  const normId = (s) => s.trim().toLowerCase();
+  const ID_RE = /^[a-z0-9_]{3,20}$/;
+
+  // ---------- 세션 ----------
+  function readSession() {
+    try {
+      return localStorage.getItem(SESSION_KEY) || sessionStorage.getItem(SESSION_KEY);
+    } catch (e) { return null; }
+  }
+  function writeSession(id, keep) {
+    try {
+      (keep ? localStorage : sessionStorage).setItem(SESSION_KEY, id);
+      (keep ? sessionStorage : localStorage).removeItem(SESSION_KEY);
+    } catch (e) {}
+  }
+  function clearSession() {
+    try { localStorage.removeItem(SESSION_KEY); sessionStorage.removeItem(SESSION_KEY); } catch (e) {}
+  }
+
+  // ---------- 인증 화면 ----------
+  const authScreen = $("#authScreen"), appEl = $("#app");
+  const loginForm = $("#loginForm"), signupForm = $("#signupForm");
+  const tabLogin = $("#tabLogin"), tabSignup = $("#tabSignup");
+  const liId = $("#li-id"), liPw = $("#li-pw"), liKeep = $("#li-keep"), liError = $("#li-error");
+  const suId = $("#su-id"), suPw = $("#su-pw"), suPw2 = $("#su-pw2"), suError = $("#su-error");
+
+  function showTab(which) {
+    const login = which === "login";
+    tabLogin.setAttribute("aria-selected", String(login));
+    tabSignup.setAttribute("aria-selected", String(!login));
+    loginForm.hidden = !login;
+    signupForm.hidden = login;
+    liError.textContent = "";
+    suError.textContent = "";
+    setTimeout(() => (login ? liId : suId).focus(), 30);
+  }
+  tabLogin.addEventListener("click", () => showTab("login"));
+  tabSignup.addEventListener("click", () => showTab("signup"));
+
+  function busy(form, on, label) {
+    const btn = form.querySelector("button[type=submit]");
+    btn.disabled = on;
+    if (on) { btn.dataset.label = btn.textContent; btn.textContent = label; }
+    else if (btn.dataset.label) btn.textContent = btn.dataset.label;
+  }
+
+  signupForm.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const id = normId(suId.value);
+    const pw = suPw.value;
+
+    if (!ID_RE.test(id)) { suError.textContent = "아이디는 영문 소문자·숫자·밑줄 3~20자여야 합니다."; return; }
+    if (pw.length < 6) { suError.textContent = "비밀번호는 6자 이상이어야 합니다."; return; }
+    if (pw !== suPw2.value) { suError.textContent = "비밀번호가 서로 다릅니다."; return; }
+
+    const users = loadUsers();
+    if (users[id]) { suError.textContent = "이미 사용 중인 아이디입니다."; return; }
+
+    busy(signupForm, true, "가입 중…");
+    try {
+      const salt = randomSalt();
+      const { algo, hash } = await hashPassword(pw, salt);
+      users[id] = { id, salt, hash, algo, iter: PBKDF2_ITER, createdAt: new Date().toISOString() };
+      if (!saveUsers(users)) {
+        suError.textContent = "브라우저 저장소에 접근할 수 없어 가입할 수 없습니다.";
+        return;
+      }
+      adoptLegacyEvents(id);
+      suPw.value = suPw2.value = "";
+      enterApp(id, true);
+    } finally {
+      busy(signupForm, false);
+    }
+  });
+
+  loginForm.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const id = normId(liId.value);
+    const pw = liPw.value;
+    const user = loadUsers()[id];
+
+    busy(loginForm, true, "확인 중…");
+    try {
+      // 아이디가 없어도 같은 비용을 치러 존재 여부가 드러나지 않게 한다.
+      const { hash } = await hashPassword(pw, user ? user.salt : "unknown-user-salt");
+      if (!user || !safeEqual(hash, user.hash)) {
+        liError.textContent = "아이디 또는 비밀번호가 올바르지 않습니다.";
+        liPw.select();
+        return;
+      }
+      liPw.value = "";
+      liError.textContent = "";
+      enterApp(id, liKeep.checked);
+    } finally {
+      busy(loginForm, false);
+    }
+  });
+
+  // 로그인 도입 이전에 쌓인 일정을 첫 계정이 이어받는다.
+  function adoptLegacyEvents(id) {
+    try {
+      const legacy = localStorage.getItem(LEGACY_STORE_KEY);
+      if (!legacy) return;
+      if (!localStorage.getItem(storeKeyFor(id))) localStorage.setItem(storeKeyFor(id), legacy);
+      localStorage.removeItem(LEGACY_STORE_KEY);
+    } catch (e) {}
+  }
+
+  // ---------- 앱 진입 / 종료 ----------
+  function enterApp(id, keep) {
+    currentUser = id;
+    writeSession(id, keep);
+
+    $("#userName").textContent = id;
+    $("#userAvatar").textContent = id.slice(0, 1).toUpperCase();
+
+    events = load();
+    save();                              // seed() 로 시작한 경우 즉시 계정에 귀속
+    viewDate = new Date();
+    miniDate = new Date();
+    selectedKey = todayKey();
+    query = "";
+    $("#search").value = "";
+
+    authScreen.hidden = true;
+    appEl.hidden = false;
+    render();
+  }
+
+  function logout() {
+    document.querySelectorAll(".backdrop.open").forEach(close);
+    clearSession();
+    currentUser = null;
+    events = [];
+    editingId = null;
+    appEl.hidden = true;
+    authScreen.hidden = false;
+    liPw.value = "";
+    showTab("login");
+  }
+  $("#logoutBtn").addEventListener("click", logout);
+
+  // ---------- 시작 ----------
+  (function boot() {
+    const users = loadUsers();
+    const hasAccounts = Object.keys(users).length > 0;
+    if (!hasAccounts) {
+      $("#authSub").textContent = "먼저 계정을 만들면 내 일정만 따로 보관됩니다.";
+      showTab("signup");
+    } else {
+      showTab("login");
+    }
+    const sessionId = readSession();
+    if (sessionId && users[sessionId]) {
+      liId.value = sessionId;
+      enterApp(sessionId, !!localStorage.getItem(SESSION_KEY));
+    }
+  })();
 })();
 </script>
 </body>
