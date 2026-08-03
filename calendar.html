@@ -835,6 +835,79 @@
     return imported;
   }
 
+  // Google Calendar에서 액세스 토큰 얻기 (리다이렉트 기반 OAuth)
+  async function requestGoogleAccessToken() {
+    const clientId = googleConfig.clientId;
+    const redirectUri = window.location.origin + window.location.pathname;
+    const scope = "https://www.googleapis.com/auth/calendar";
+    const state = Math.random().toString(36).substring(7);
+    
+    // state 저장 (나중에 검증하기 위해)
+    sessionStorage.setItem('oauth_state', state);
+    
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+      `client_id=${encodeURIComponent(clientId)}&` +
+      `redirect_uri=${encodeURIComponent(redirectUri)}&` +
+      `response_type=token&` +
+      `scope=${encodeURIComponent(scope)}&` +
+      `state=${encodeURIComponent(state)}`;
+    
+    // 새 윈도우에서 열기 (팝업)
+    const popup = window.open(authUrl, 'google_oauth', 'width=500,height=600');
+    
+    // 팝업이 차단되었을 수도 있으므로 확인
+    if (!popup) {
+      console.error('❌ OAuth 팝업이 차단되었습니다. 팝업 허용을 설정해주세요.');
+      showGoogleStatus('팝업이 차단되었습니다. 팝업 허용을 설정해주세요.');
+      return false;
+    }
+    
+    console.log("🔓 OAuth 팝업 열림");
+    return true;
+  }
+
+  // URL의 토큰 파라미터에서 액세스 토큰 추출
+  function checkGoogleOAuthCallback() {
+    const hash = window.location.hash;
+    if (!hash) return;
+    
+    const params = new URLSearchParams(hash.substring(1));
+    const accessToken = params.get('access_token');
+    const state = params.get('state');
+    const error = params.get('error');
+    
+    if (error) {
+      console.error('❌ OAuth 에러:', error);
+      showGoogleStatus(`OAuth 실패: ${error}`);
+      return;
+    }
+    
+    if (accessToken && state === sessionStorage.getItem('oauth_state')) {
+      console.log("✅ 액세스 토큰 획득 완료");
+      googleAccessToken = accessToken;
+      googleConfig.connected = true;
+      saveGoogleConfig();
+      
+      // 토큰 획득 후 처리
+      handleGoogleOAuthSuccess();
+      
+      // URL에서 해시 제거
+      window.history.replaceState(null, null, window.location.pathname);
+    }
+  }
+  
+  async function handleGoogleOAuthSuccess() {
+    try {
+      const imported = await importGoogleEvents(googleConfig.calendarId);
+      updateGoogleSettingsUI();
+      showGoogleStatus(imported.length ? `연동 완료: ${imported.length}개의 일정을 가져왔습니다.` : "연동 완료: 새 일정이 없습니다.");
+      console.log("✅ Google Calendar 연동 완료");
+    } catch (err) {
+      showGoogleStatus(err.message || "Google Calendar 연동 중 오류가 발생했습니다.");
+      console.error("❌ 연동 오류:", err);
+    }
+  }
+
   async function connectGoogleCalendar() {
     googleConfig.clientId = (googleClientIdInput.value || "").trim();
     googleConfig.calendarId = (googleCalendarIdInput.value || "").trim() || "primary";
@@ -844,49 +917,41 @@
       showGoogleStatus("Google API Client ID를 입력해 주세요.");
       return;
     }
-    if (!window.google || !window.google.accounts || !window.google.accounts.oauth2) {
-      showGoogleStatus("Google SDK를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
-      return;
-    }
 
     console.log("🔐 Google OAuth 시작:", { clientId: googleConfig.clientId, calendarId: googleConfig.calendarId });
     showGoogleStatus("Google 계정으로 인증 중...");
 
-    if (!googleTokenClient) {
-      googleTokenClient = window.google.accounts.oauth2.initTokenClient({
-        client_id: googleConfig.clientId,
-        scope: "https://www.googleapis.com/auth/calendar",
-        callback: async (resp) => {
-          console.log("📱 OAuth 콜백 응답:", resp.error ? `에러: ${resp.error}` : "성공");
-          if (resp.error) {
-            showGoogleStatus(`연결 실패: ${resp.error}`);
-            console.error("❌ OAuth 에러:", resp.error);
-            return;
+    // 팝업 기반 OAuth 시도
+    if (window.google?.accounts?.oauth2?.initTokenClient) {
+      if (!googleTokenClient) {
+        googleTokenClient = window.google.accounts.oauth2.initTokenClient({
+          client_id: googleConfig.clientId,
+          scope: "https://www.googleapis.com/auth/calendar",
+          callback: async (resp) => {
+            console.log("📱 OAuth 콜백 응답:", resp.error ? `에러: ${resp.error}` : "성공");
+            if (resp.error) {
+              showGoogleStatus(`연결 실패: ${resp.error}`);
+              console.error("❌ OAuth 에러:", resp.error);
+              return;
+            }
+            googleAccessToken = resp.access_token;
+            console.log("✅ 액세스 토큰 획득 완료");
+            await handleGoogleOAuthSuccess();
           }
-          googleAccessToken = resp.access_token;
-          console.log("✅ 액세스 토큰 획득 완료");
-          try {
-            const imported = await importGoogleEvents(googleConfig.calendarId);
-            googleConfig.connected = true;
-            saveGoogleConfig();
-            updateGoogleSettingsUI();
-            showGoogleStatus(imported.length ? `연동 완료: ${imported.length}개의 일정을 가져왔습니다.` : "연동 완료: 새 일정이 없습니다.");
-            console.log("✅ Google Calendar 연동 완료");
-          } catch (err) {
-            showGoogleStatus(err.message || "Google Calendar 연동 중 오류가 발생했습니다.");
-            console.error("❌ 연동 오류:", err);
-          }
-        }
-      });
-    }
-
-    try {
-      console.log("🔓 requestAccessToken 호출 중...");
-      googleTokenClient.requestAccessToken({ prompt: "consent" });
-      console.log("✅ requestAccessToken 호출 완료");
-    } catch (err) {
-      console.error("❌ requestAccessToken 에러:", err);
-      showGoogleStatus(`OAuth 요청 실패: ${err.message}`);
+        });
+      }
+      try {
+        console.log("🔓 requestAccessToken 호출 중...");
+        googleTokenClient.requestAccessToken({ prompt: "consent" });
+        console.log("✅ requestAccessToken 호출 완료");
+      } catch (err) {
+        console.error("❌ requestAccessToken 에러:", err);
+        // 팝업 기반 실패 시 리다이렉트 기반으로 시도
+        await requestGoogleAccessToken();
+      }
+    } else {
+      // Google SDK가 로드되지 않으면 리다이렉트 기반 OAuth 사용
+      await requestGoogleAccessToken();
     }
   }
 
@@ -1376,6 +1441,9 @@
     authScreen.hidden = true;
     appEl.hidden = false;
     render();
+    
+    // Google OAuth 콜백 확인 (리다이렉트 기반 OAuth로 돌아온 경우)
+    setTimeout(() => checkGoogleOAuthCallback(), 100);
   }
 
   function logout() {
