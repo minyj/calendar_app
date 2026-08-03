@@ -849,30 +849,45 @@
       return;
     }
 
+    console.log("🔐 Google OAuth 시작:", { clientId: googleConfig.clientId, calendarId: googleConfig.calendarId });
+    showGoogleStatus("Google 계정으로 인증 중...");
+
     if (!googleTokenClient) {
       googleTokenClient = window.google.accounts.oauth2.initTokenClient({
         client_id: googleConfig.clientId,
         scope: "https://www.googleapis.com/auth/calendar",
         callback: async (resp) => {
+          console.log("📱 OAuth 콜백 응답:", resp.error ? `에러: ${resp.error}` : "성공");
           if (resp.error) {
             showGoogleStatus(`연결 실패: ${resp.error}`);
+            console.error("❌ OAuth 에러:", resp.error);
             return;
           }
           googleAccessToken = resp.access_token;
+          console.log("✅ 액세스 토큰 획득 완료");
           try {
             const imported = await importGoogleEvents(googleConfig.calendarId);
             googleConfig.connected = true;
             saveGoogleConfig();
             updateGoogleSettingsUI();
             showGoogleStatus(imported.length ? `연동 완료: ${imported.length}개의 일정을 가져왔습니다.` : "연동 완료: 새 일정이 없습니다.");
+            console.log("✅ Google Calendar 연동 완료");
           } catch (err) {
             showGoogleStatus(err.message || "Google Calendar 연동 중 오류가 발생했습니다.");
+            console.error("❌ 연동 오류:", err);
           }
         }
       });
     }
 
-    googleTokenClient.requestAccessToken({ prompt: "consent" });
+    try {
+      console.log("🔓 requestAccessToken 호출 중...");
+      googleTokenClient.requestAccessToken({ prompt: "consent" });
+      console.log("✅ requestAccessToken 호출 완료");
+    } catch (err) {
+      console.error("❌ requestAccessToken 에러:", err);
+      showGoogleStatus(`OAuth 요청 실패: ${err.message}`);
+    }
   }
 
   function disconnectGoogleCalendar() {
