@@ -87,6 +87,12 @@
     color: var(--text-2);
   }
   .iconbtn:hover { background: var(--surface-2); }
+  .avatarbtn {
+    width: 36px; height: 36px; border-radius: 50%; border: none;
+    background: linear-gradient(135deg, var(--accent), #7c4dff);
+    color: #fff; font-weight: 700; cursor: pointer; box-shadow: var(--shadow);
+  }
+  .avatarbtn:hover { filter: brightness(1.05); }
 
   .search {
     display: flex; align-items: center; gap: 6px;
@@ -376,6 +382,7 @@
       <span>🔍</span>
       <input id="search" type="search" placeholder="일정 검색" />
     </div>
+    <button class="avatarbtn" id="profileBtn" title="Google Calendar 설정">Y</button>
     <button class="btn primary" id="createBtn">＋ 만들기</button>
     <div class="userchip">
       <span class="avatar" id="userAvatar"></span>
@@ -473,6 +480,34 @@
   </div>
 </div>
 
+<!-- Google Calendar 설정 모달 -->
+<div class="backdrop" id="settingsBackdrop">
+  <div class="modal" role="dialog" aria-modal="true" style="max-width:460px">
+    <header>
+      <h2>Google Calendar 설정</h2>
+      <button class="iconbtn" data-close>✕</button>
+    </header>
+    <div class="content">
+      <div class="field">
+        <label for="googleClientId">Google API Client ID</label>
+        <input class="input" id="googleClientId" placeholder="예: 1234567890-abc123.apps.googleusercontent.com" />
+      </div>
+      <div class="field">
+        <label for="googleCalendarId">Google Calendar ID</label>
+        <input class="input" id="googleCalendarId" placeholder="예: primary 또는 캘린더 이메일" />
+      </div>
+      <div class="hint" style="text-align:left;padding:0">Google는 비밀번호로 연결하지 않습니다. 아래 버튼으로 Google 계정 권한을 승인하면 일정이 안전하게 가져와집니다.</div>
+      <div class="error" id="googleStatus">연결 전입니다.</div>
+    </div>
+    <footer>
+      <button class="btn" id="googleDisconnectBtn" type="button">연결 해제</button>
+      <div class="spacer"></div>
+      <button class="btn primary" id="googleConnectBtn" type="button">Google 연결</button>
+    </footer>
+  </div>
+</div>
+
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
 (function () {
   "use strict";
@@ -481,6 +516,7 @@
   const LEGACY_STORE_KEY = "simple-calendar-events-v1";        // 로그인 도입 이전 데이터
   const USERS_KEY = "simple-calendar-users-v1";
   const SESSION_KEY = "simple-calendar-session-v1";
+  const GOOGLE_CONFIG_KEY = "simple-calendar-google-config-v1";
   const storeKeyFor = (id) => `${LEGACY_STORE_KEY}:${id}`;
   const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
   const COLORS = [
@@ -530,6 +566,9 @@
   let query = "";
   let editingId = null;
   let formColor = "blue";
+  let googleConfig = loadGoogleConfig();
+  let googleAccessToken = null;
+  let googleTokenClient = null;
 
   function load() {
     if (!currentUser) return [];
@@ -545,6 +584,16 @@
   function save() {
     if (!currentUser) return;
     try { localStorage.setItem(storeKeyFor(currentUser), JSON.stringify(events)); } catch (e) {}
+  }
+  function loadGoogleConfig() {
+    try {
+      const raw = localStorage.getItem(GOOGLE_CONFIG_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (e) {}
+    return { clientId: "", calendarId: "primary", connected: false };
+  }
+  function saveGoogleConfig() {
+    try { localStorage.setItem(GOOGLE_CONFIG_KEY, JSON.stringify(googleConfig)); } catch (e) {}
   }
   function seed() {
     const t = todayKey();
@@ -573,7 +622,9 @@
   const grid = $("#grid"), titleEl = $("#title");
   const miniGrid = $("#miniGrid"), miniTitle = $("#miniTitle");
   const upcomingList = $("#upcomingList");
-  const editBackdrop = $("#editBackdrop"), dayBackdrop = $("#dayBackdrop");
+  const editBackdrop = $("#editBackdrop"), dayBackdrop = $("#dayBackdrop"), settingsBackdrop = $("#settingsBackdrop");
+  const googleClientIdInput = $("#googleClientId"), googleCalendarIdInput = $("#googleCalendarId");
+  const googleStatusEl = $("#googleStatus");
 
   // 요일 헤더
   $("#weekdays").innerHTML = WEEKDAYS
@@ -722,6 +773,116 @@
     });
   }
 
+  // ---------- Google Calendar 설정 ----------
+  function updateGoogleSettingsUI() {
+    googleClientIdInput.value = googleConfig.clientId || "";
+    googleCalendarIdInput.value = googleConfig.calendarId || "primary";
+    const btn = $("#googleConnectBtn");
+    const disconnectBtn = $("#googleDisconnectBtn");
+    if (googleConfig.connected) {
+      googleStatusEl.textContent = `연결됨 · ${googleConfig.calendarId || "primary"}`;
+      btn.textContent = "다시 연결";
+      disconnectBtn.style.display = "inline-block";
+    } else {
+      googleStatusEl.textContent = "연결 전입니다.";
+      btn.textContent = "Google 연결";
+      disconnectBtn.style.display = "inline-block";
+    }
+  }
+
+  function showGoogleStatus(message) {
+    googleStatusEl.textContent = message;
+  }
+
+  async function importGoogleEvents(calendarId) {
+    if (!googleAccessToken) throw new Error("인증 토큰이 없습니다.");
+    const timeMin = new Date().toISOString();
+    const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?maxResults=20&singleEvents=true&orderBy=startTime&timeMin=${encodeURIComponent(timeMin)}`;
+    const response = await fetch(url, { headers: { Authorization: `Bearer ${googleAccessToken}` } });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error?.message || "Google Calendar 조회에 실패했습니다.");
+
+    const existingIds = new Set(events.filter((e) => e.googleEventId).map((e) => e.googleEventId));
+    const imported = (data.items || [])
+      .filter((item) => item && item.status !== "cancelled")
+      .map((item) => {
+        const start = item.start || {};
+        const end = item.end || {};
+        const allDay = Boolean(start.date);
+        const date = start.date || (start.dateTime || "").slice(0, 10) || todayKey();
+        const startTime = start.dateTime ? start.dateTime.slice(11, 16) : "";
+        const endTime = end.dateTime ? end.dateTime.slice(11, 16) : "";
+        return {
+          id: uid(),
+          title: item.summary || "(제목 없음)",
+          date,
+          allDay,
+          start: allDay ? "" : startTime,
+          end: allDay ? "" : endTime,
+          color: "blue",
+          desc: item.description || item.location || "",
+          googleEventId: item.id,
+          googleCalendarId: calendarId
+        };
+      })
+      .filter((e) => !existingIds.has(e.googleEventId));
+
+    if (imported.length) {
+      events = [...events, ...imported];
+      save();
+      render();
+    }
+    return imported;
+  }
+
+  async function connectGoogleCalendar() {
+    googleConfig.clientId = (googleClientIdInput.value || "").trim();
+    googleConfig.calendarId = (googleCalendarIdInput.value || "").trim() || "primary";
+    saveGoogleConfig();
+
+    if (!googleConfig.clientId) {
+      showGoogleStatus("Google API Client ID를 입력해 주세요.");
+      return;
+    }
+    if (!window.google || !window.google.accounts || !window.google.accounts.oauth2) {
+      showGoogleStatus("Google SDK를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
+      return;
+    }
+
+    if (!googleTokenClient) {
+      googleTokenClient = window.google.accounts.oauth2.initTokenClient({
+        client_id: googleConfig.clientId,
+        scope: "https://www.googleapis.com/auth/calendar.readonly",
+        callback: async (resp) => {
+          if (resp.error) {
+            showGoogleStatus(`연결 실패: ${resp.error}`);
+            return;
+          }
+          googleAccessToken = resp.access_token;
+          try {
+            const imported = await importGoogleEvents(googleConfig.calendarId);
+            googleConfig.connected = true;
+            saveGoogleConfig();
+            updateGoogleSettingsUI();
+            showGoogleStatus(imported.length ? `연동 완료: ${imported.length}개의 일정을 가져왔습니다.` : "연동 완료: 새 일정이 없습니다.");
+          } catch (err) {
+            showGoogleStatus(err.message || "Google Calendar 연동 중 오류가 발생했습니다.");
+          }
+        }
+      });
+    }
+
+    googleTokenClient.requestAccessToken({ prompt: "consent" });
+  }
+
+  function disconnectGoogleCalendar() {
+    googleAccessToken = null;
+    googleConfig.connected = false;
+    saveGoogleConfig();
+    updateGoogleSettingsUI();
+    showGoogleStatus("연결이 해제되었습니다.");
+  }
+
   // ---------- 편집 모달 ----------
   const fTitle = $("#f-title"), fAllDay = $("#f-allday"), fDate = $("#f-date");
   const fStart = $("#f-start"), fEnd = $("#f-end"), fDesc = $("#f-desc"), fError = $("#f-error");
@@ -846,7 +1007,7 @@
   document.querySelectorAll("[data-close]").forEach((b) =>
     b.addEventListener("click", () => close(b.closest(".backdrop")))
   );
-  [editBackdrop, dayBackdrop].forEach((bd) =>
+  [editBackdrop, dayBackdrop, settingsBackdrop].forEach((bd) =>
     bd.addEventListener("mousedown", (ev) => { if (ev.target === bd) close(bd); })
   );
 
@@ -859,7 +1020,10 @@
   $("#miniPrev").addEventListener("click", () => { miniDate = addMonths(miniDate, -1); renderMini(); });
   $("#miniNext").addEventListener("click", () => { miniDate = addMonths(miniDate, 1); renderMini(); });
   $("#createBtn").addEventListener("click", () => openEdit(null, selectedKey));
+  $("#profileBtn").addEventListener("click", () => { updateGoogleSettingsUI(); open(settingsBackdrop); });
   $("#search").addEventListener("input", (ev) => { query = ev.target.value.trim(); render(); });
+  $("#googleConnectBtn").addEventListener("click", () => { connectGoogleCalendar(); });
+  $("#googleDisconnectBtn").addEventListener("click", () => { disconnectGoogleCalendar(); });
 
   // ---------- 단축키 ----------
   document.addEventListener("keydown", (ev) => {
@@ -1089,6 +1253,7 @@
 
   // ---------- 시작 ----------
   (function boot() {
+    updateGoogleSettingsUI();
     const users = loadUsers();
     const hasAccounts = Object.keys(users).length > 0;
     if (!hasAccounts) {
