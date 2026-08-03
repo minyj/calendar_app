@@ -885,7 +885,10 @@
 
   // Google Calendar에 이벤트 생성
   async function createGoogleEvent(event) {
-    if (!googleAccessToken || !googleConfig.connected || !googleConfig.calendarId) return;
+    if (!googleAccessToken || !googleConfig.connected || !googleConfig.calendarId) {
+      console.log("Google 이벤트 생성 스킵:", { hasToken: !!googleAccessToken, connected: googleConfig.connected, calendarId: googleConfig.calendarId });
+      return;
+    }
     try {
       const startDateTime = event.allDay 
         ? { date: event.date }
@@ -903,6 +906,7 @@
       };
 
       const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(googleConfig.calendarId)}/events`;
+      console.log("Google 이벤트 생성 중:", event.title);
       const response = await fetch(url, {
         method: "POST",
         headers: { 
@@ -915,18 +919,22 @@
       if (response.ok && result.id) {
         event.googleEventId = result.id;
         event.googleCalendarId = googleConfig.calendarId;
+        console.log("✅ Google 이벤트 생성 성공:", result.id);
         return result.id;
       } else if (!response.ok) {
-        console.warn("Google 이벤트 생성 실패:", result.error?.message);
+        console.error("❌ Google 이벤트 생성 실패:", response.status, result.error?.message);
       }
     } catch (err) {
-      console.warn("Google 이벤트 생성 오류:", err.message);
+      console.error("❌ Google 이벤트 생성 오류:", err);
     }
   }
 
   // Google Calendar에서 이벤트 수정
   async function updateGoogleEvent(event) {
-    if (!event.googleEventId || !googleAccessToken || !googleConfig.connected) return;
+    if (!event.googleEventId || !googleAccessToken || !googleConfig.connected) {
+      console.log("Google 이벤트 수정 스킵:", { hasGoogleId: !!event.googleEventId, hasToken: !!googleAccessToken, connected: googleConfig.connected });
+      return;
+    }
     try {
       const startDateTime = event.allDay 
         ? { date: event.date }
@@ -944,6 +952,7 @@
       };
 
       const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(event.googleCalendarId || googleConfig.calendarId)}/events/${encodeURIComponent(event.googleEventId)}`;
+      console.log("Google 이벤트 수정 중:", event.title, event.googleEventId);
       const response = await fetch(url, {
         method: "PATCH",
         headers: { 
@@ -954,28 +963,36 @@
       });
       if (!response.ok) {
         const result = await response.json();
-        console.warn("Google 이벤트 수정 실패:", result.error?.message);
+        console.error("❌ Google 이벤트 수정 실패:", response.status, result.error?.message);
+      } else {
+        console.log("✅ Google 이벤트 수정 성공:", event.googleEventId);
       }
     } catch (err) {
-      console.warn("Google 이벤트 수정 오류:", err.message);
+      console.error("❌ Google 이벤트 수정 오류:", err);
     }
   }
 
   // Google Calendar에서 이벤트 삭제
   async function deleteGoogleEvent(event) {
-    if (!event.googleEventId || !googleAccessToken || !googleConfig.connected) return;
+    if (!event.googleEventId || !googleAccessToken || !googleConfig.connected) {
+      console.log("Google 이벤트 삭제 스킵:", { hasGoogleId: !!event.googleEventId, hasToken: !!googleAccessToken, connected: googleConfig.connected });
+      return;
+    }
     try {
       const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(event.googleCalendarId || googleConfig.calendarId)}/events/${encodeURIComponent(event.googleEventId)}`;
+      console.log("Google 이벤트 삭제 중:", event.googleEventId);
       const response = await fetch(url, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${googleAccessToken}` }
       });
       if (!response.ok) {
         const result = await response.json();
-        console.warn("Google 이벤트 삭제 실패:", result.error?.message);
+        console.error("❌ Google 이벤트 삭제 실패:", response.status, result.error?.message);
+      } else {
+        console.log("✅ Google 이벤트 삭제 성공:", event.googleEventId);
       }
     } catch (err) {
-      console.warn("Google 이벤트 삭제 오류:", err.message);
+      console.error("❌ Google 이벤트 삭제 오류:", err);
     }
   }
 
