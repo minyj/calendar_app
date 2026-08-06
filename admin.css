@@ -1,0 +1,14 @@
+/* 회원 관리 페이지 전용 스타일 */
+.admin { display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; padding: 24px; background: var(--bg); }
+.admin-shell { width: min(960px, 100%); display: flex; flex-direction: column; gap: 16px; }
+.admin-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.admin-header h1 { margin: 0; font-size: 24px; }
+.admin-header p { margin: 4px 0 0; color: var(--text-2); }
+.admin-card { background: var(--surface); border: 1px solid var(--border-soft); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px; }
+.admin-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.admin-list { display: flex; flex-direction: column; gap: 10px; }
+.admin-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--border-soft); border-radius: 10px; background: var(--surface-2); }
+.admin-row .meta { display: flex; flex-direction: column; gap: 2px; }
+.admin-actions { display: flex; gap: 8px; }
+.admin-actions button { padding: 6px 10px; }
+.admin-error { min-height: 18px; color: var(--danger); margin-top: 8px; font-size: 13px; }

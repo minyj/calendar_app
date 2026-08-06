@@ -1,0 +1,70 @@
+/* 캘린더와 회원 관리 페이지가 함께 쓰는 기본 스타일 */
+  :root {
+    --bg: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #f8f9fa;
+    --border: #dadce0;
+    --border-soft: #e8eaed;
+    --text: #202124;
+    --text-2: #5f6368;
+    --text-3: #80868b;
+    --accent: #1a73e8;
+    --accent-soft: #e8f0fe;
+    --danger: #d93025;
+    --shadow: 0 1px 3px rgba(60,64,67,.15), 0 4px 12px rgba(60,64,67,.12);
+    --radius: 10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17181a;
+      --surface: #1f2023;
+      --surface-2: #26282c;
+      --border: #3c4043;
+      --border-soft: #2e3134;
+      --text: #e8eaed;
+      --text-2: #9aa0a6;
+      --text-3: #7f858a;
+      --accent: #8ab4f8;
+      --accent-soft: #1f3145;
+      --danger: #f28b82;
+      --shadow: 0 1px 3px rgba(0,0,0,.5), 0 6px 18px rgba(0,0,0,.4);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Pretendard", "Apple SD Gothic Neo", -apple-system, BlinkMacSystemFont,
+                 "Segoe UI", Roboto, "Noto Sans KR", "Malgun Gothic", sans-serif;
+    font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+  }
+  button, input, textarea, select { font: inherit; color: inherit; }
+
+  .btn {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    border-radius: 999px;
+    padding: 7px 15px;
+    cursor: pointer;
+    transition: background .15s, box-shadow .15s;
+  }
+  .btn:hover { background: var(--surface-2); }
+  .btn.primary {
+    border: none; background: var(--accent); color: #fff; font-weight: 500;
+    box-shadow: var(--shadow); padding: 9px 18px;
+  }
+  @media (prefers-color-scheme: dark) { .btn.primary { color: #17181a; } }
+  .btn.primary:hover { filter: brightness(1.05); }
+
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label { font-size: 12px; color: var(--text-2); }
+  .input {
+    border: 1px solid var(--border); background: var(--surface); border-radius: 8px;
+    padding: 9px 11px; outline: none; width: 100%;
+  }
+  .input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+  .error { color: var(--danger); font-size: 12px; min-height: 16px; }
+  .pill { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-weight: 700; }
