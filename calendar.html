@@ -1583,7 +1583,7 @@
     ev.preventDefault();
     const id = normId(liId.value);
     const pw = liPw.value;
-    const user = loadUsers()[id];
+    let user = loadUsers()[id];
 
     busy(loginForm, true, "확인 중…");
     try {
