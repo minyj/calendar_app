@@ -242,11 +242,28 @@
   .userchip .out { border: none; background: transparent; color: var(--text-2); cursor: pointer; font-size: 12px; padding: 4px 8px; border-radius: 999px; }
   .userchip .out:hover { background: var(--surface-2); color: var(--text); }
 
+  /* 좁은 화면에서만 나타나는 검색 토글 */
+  #searchToggleBtn { display: none; }
+
   @media (max-width: 900px) {
     .sidebar { display: none; }
     .search { display: none; }
     .brand span { display: none; }
     .userchip .who { display: none; }
+
+    /* 날짜 숫자가 칸 높이의 40%를 먹어 일정이 잘리던 것을 줄인다. */
+    .daynum {
+      font-size: 20px; width: 28px; height: 28px; line-height: 28px;
+      margin-bottom: 1px;
+    }
+    .cell { padding: 3px 3px 4px; }
+    .chip { font-size: 11px; padding: 1px 5px; gap: 4px; }
+    .chip .dot { width: 7px; height: 7px; }
+    .more { font-size: 10.5px; padding: 0 5px; }
+
+    /* 검색창은 접어 두고 아이콘으로 펼친다. 펼치면 상단바 아래 한 줄을 차지한다. */
+    #searchToggleBtn { display: block; }
+    .search.open { display: flex; width: 100%; order: 99; }
   }
 </style>
 </head>
@@ -312,7 +329,8 @@
     <button class="iconbtn" id="nextBtn" title="다음 달 (→)">›</button>
     <h1 id="title"></h1>
     <div class="spacer"></div>
-    <div class="search">
+    <button class="iconbtn" id="searchToggleBtn" type="button" title="일정 검색" aria-expanded="false">🔍</button>
+    <div class="search" id="searchBox">
       <span>🔍</span>
       <input id="search" type="search" placeholder="일정 검색" />
     </div>
@@ -562,6 +580,7 @@
 
   // 로컬에서 일정이 바뀌었음을 표시한다. 다음 동기화 때 구글로 올라간다.
   function markDirty(event) {
+    delete event.demo;                 // 손을 댔다면 더 이상 예시가 아니다
     event.updatedAt = new Date().toISOString();
     event.dirty = true;
     return event;
@@ -580,8 +599,8 @@
   function seed() {
     const t = todayKey();
     return [
-      { id: uid(), title: "👋 일정을 클릭하면 수정할 수 있어요", date: t, allDay: true, start: "", end: "", color: "green", desc: "빈 날짜를 클릭하면 새 일정이 추가됩니다. 드래그해서 날짜를 옮길 수도 있어요." },
-      { id: uid(), title: "팀 회의", date: t, allDay: false, start: "14:00", end: "15:00", color: "blue", desc: "" }
+      { id: uid(), title: "👋 일정을 클릭하면 수정할 수 있어요", date: t, allDay: true, start: "", end: "", color: "green", desc: "빈 날짜를 클릭하면 새 일정이 추가됩니다. 드래그해서 날짜를 옮길 수도 있어요.", demo: true },
+      { id: uid(), title: "팀 회의", date: t, allDay: false, start: "14:00", end: "15:00", color: "blue", desc: "", demo: true }
     ];
   }
 
@@ -633,6 +652,52 @@
     return cells;
   }
 
+  const isCompact = () => window.matchMedia("(max-width: 900px)").matches;
+
+  // 한 칸에 몇 개를 그릴지는 화면마다 다르다. 넘치면 overflow:hidden 으로 잘려
+  // "+N개 더보기"까지 사라지므로, 실제 높이를 재서 들어갈 만큼만 그린다.
+  let chipCapacity = 3;
+  let capacityPending = false;
+
+  function measureChipCapacity() {
+    const cell = grid.querySelector(".cell");
+    if (!cell || !cell.clientHeight) return chipCapacity;
+
+    const probe = document.createElement("div");
+    probe.className = "cell";
+    probe.style.cssText = "position:absolute;left:-9999px;top:0;width:120px;visibility:hidden";
+    probe.innerHTML =
+      '<div class="daynum">8</div>' +
+      '<div class="events">' +
+      '<button class="chip"><span class="dot"></span><span class="name">측정</span></button>' +
+      '<button class="more">+1개 더보기</button>' +
+      "</div>";
+    document.body.appendChild(probe);
+    const daynumH = probe.querySelector(".daynum").offsetHeight;
+    const chipH = probe.querySelector(".chip").offsetHeight;
+    const moreH = probe.querySelector(".more").offsetHeight;
+    document.body.removeChild(probe);
+    if (!chipH) return chipCapacity;
+
+    const style = getComputedStyle(cell);
+    const padding = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+    const gap = 2;
+    // "+N개 더보기" 자리는 늘 비워 둔다. 가려진 일정이 있다는 신호가 잘리면 안 된다.
+    const room = cell.clientHeight - padding - daynumH - moreH - gap * 2;
+    const fit = Math.floor((room + gap) / (chipH + gap));
+    return Math.max(1, Math.min(3, fit));
+  }
+
+  function scheduleCapacityCheck() {
+    if (capacityPending) return;
+    capacityPending = true;
+    requestAnimationFrame(() => {
+      capacityPending = false;
+      const next = measureChipCapacity();
+      if (next !== chipCapacity) { chipCapacity = next; renderGrid(); }
+    });
+  }
+
   function renderGrid() {
     titleEl.textContent = `${viewDate.getFullYear()}년 ${viewDate.getMonth() + 1}월`;
     const cells = monthCells(viewDate);
@@ -657,7 +722,7 @@
       const list = document.createElement("div");
       list.className = "events";
       const dayEvents = eventsOn(k);
-      const MAX = 3;
+      const MAX = chipCapacity;
       dayEvents.slice(0, MAX).forEach((e) => list.appendChild(chip(e)));
       if (dayEvents.length > MAX) {
         const more = document.createElement("button");
@@ -668,7 +733,11 @@
       }
       cell.appendChild(list);
 
-      cell.addEventListener("click", () => openEdit(null, k));
+      cell.addEventListener("click", () => {
+        // 좁은 화면은 칸에 다 못 보여주므로, 일정이 있으면 그날 목록부터 연다.
+        if (isCompact() && eventsOn(k).length) openDay(k);
+        else openEdit(null, k);
+      });
       cell.addEventListener("dragover", (ev) => { ev.preventDefault(); cell.classList.add("drop"); });
       cell.addEventListener("dragleave", () => cell.classList.remove("drop"));
       cell.addEventListener("drop", (ev) => {
@@ -685,6 +754,8 @@
 
       grid.appendChild(cell);
     });
+
+    scheduleCapacityCheck();
   }
 
   function chip(e) {
@@ -824,7 +895,11 @@
   // 연결 직후에는 이미 있던 로컬 일정도 구글에 올라가야 한다.
   function markAllLocalDirty() {
     let count = 0;
-    events.forEach((e) => { if (!e.googleEventId) { markDirty(e); count++; } });
+    events.forEach((e) => {
+      if (e.googleEventId || e.demo) return;   // 예시 일정은 구글로 올리지 않는다
+      markDirty(e);
+      count++;
+    });
     if (count) save();
     return count;
   }
@@ -1240,6 +1315,25 @@
   $("#createBtn").addEventListener("click", () => openEdit(null, selectedKey));
   $("#profileBtn").addEventListener("click", () => { updateGoogleSettingsUI(); open(settingsBackdrop); });
   $("#search").addEventListener("input", (ev) => { query = ev.target.value.trim(); render(); });
+  $("#searchToggleBtn").addEventListener("click", () => {
+    const box = $("#searchBox");
+    const opened = box.classList.toggle("open");
+    $("#searchToggleBtn").setAttribute("aria-expanded", String(opened));
+    if (opened) {
+      $("#search").focus();
+    } else if (query) {
+      query = "";
+      $("#search").value = "";
+    }
+    render();                       // 검색줄이 생기고 사라지면 칸 높이도 달라진다
+  });
+
+  // 회전하거나 창 크기가 바뀌면 한 칸에 들어가는 개수도 달라진다.
+  let resizeTimer = null;
+  window.addEventListener("resize", () => {
+    if (resizeTimer) clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => { resizeTimer = null; if (currentUser) renderGrid(); }, 150);
+  });
   $("#googleConnectBtn").addEventListener("click", () => { connectGoogleCalendar(); });
   $("#googleDisconnectBtn").addEventListener("click", () => { disconnectGoogleCalendar(); });
   $("#googleSyncBtn").addEventListener("click", () => {
