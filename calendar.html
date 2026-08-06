@@ -1850,11 +1850,7 @@
     $("#userName").textContent = id;
     $("#userAvatar").textContent = id.slice(0, 1).toUpperCase();
 
-    if (isAdminUser(id)) {
-      showAdminView();
-      return;
-    }
-
+    // 관리자도 로그인하면 캘린더부터 본다. 회원 관리는 상단바 버튼으로 들어간다.
     showCalendarView();
 
     // Google OAuth 콜백 확인 (리다이렉트 기반 OAuth로 돌아온 경우)
@@ -1880,7 +1876,6 @@
   $("#backToCalendarBtn").addEventListener("click", () => {
     if (!currentUser) return;
     showCalendarView();
-    setTimeout(() => checkGoogleOAuthCallback(), 100);
   });
   $("#manageUsersBtn").addEventListener("click", () => {
     if (!isAdminUser(currentUser)) return;
