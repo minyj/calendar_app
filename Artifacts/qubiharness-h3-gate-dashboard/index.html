@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<script type="application/json" id="cowork-artifact-meta">
+{
+  "name": "Qubiharness H3 Gate Dashboard",
+  "schemaVersion": 1,
+  "description": "QubiHarness H3 통제형 게이트 효과 대시보드. 어제 qwen3-coder:30b(H1/H2) 제출 14건에 5단 게이트 소급 적용 결과 — 위험(코드파손) 패치 5/5 차단, 위험 자동적용 0, HITL 3, resolved 0/14. 게이트 깔때기·H1/H2 실패유형 이동·게이트 유무 비교·인스턴스별 판정 포함.",
+  "mcpTools": [],
+  "mcpServerNames": []
+}
+</script>
+<html lang="ko" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QubiHarness H3 — 게이트 효과 대시보드</title>
+<style>
+  :root{
+    --plane:#f9f9f7; --surface:#fcfcfb; --ink:#0b0b0b; --ink2:#52514e; --muted:#898781;
+    --grid:#e1e0d9; --axis:#c3c2b7; --ring:rgba(11,11,11,.10);
+    --good:#0ca30c; --warning:#fab219; --critical:#d03b3b;
+    --c1:#2a78d6; --c2:#eb6834; --c3:#1baf7a; --c4:#eda100; --c5:#e87ba4; --c6:#4a3aa7;
+    --blue300:#6da7ec; --blue450:#2a78d6; --blue550:#1c5cab; --blue650:#104281;
+  }
+  :root[data-theme="dark"]{
+    --plane:#0d0d0d; --surface:#1a1a19; --ink:#fff; --ink2:#c3c2b7; --muted:#898781;
+    --grid:#2c2c2a; --axis:#383835; --ring:rgba(255,255,255,.10);
+    --good:#0ca30c; --warning:#fab219; --critical:#d03b3b;
+    --c1:#3987e5; --c2:#d95926; --c3:#199e70; --c4:#c98500; --c5:#d55181; --c6:#9085e9;
+    --blue300:#5598e7; --blue450:#3987e5; --blue550:#256abf; --blue650:#184f95;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--plane);color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.5}
+  .wrap{max-width:960px;margin:0 auto;padding:32px 20px 64px}
+  header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap}
+  h1{font-size:22px;margin:0 0 4px} .sub{color:var(--ink2);font-size:13.5px;margin:0;max-width:640px}
+  h2{font-size:15px;margin:34px 0 12px;letter-spacing:.01em}
+  .toggle{border:1px solid var(--ring);background:var(--surface);color:var(--ink2);
+    border-radius:8px;padding:7px 12px;font-size:12.5px;cursor:pointer}
+  .tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:20px}
+  @media(max-width:640px){.tiles{grid-template-columns:repeat(2,1fr)}}
+  .tile{background:var(--surface);border:1px solid var(--ring);border-radius:12px;padding:14px 16px}
+  .tile .v{font-size:28px;font-weight:650;letter-spacing:-.01em}
+  .tile .k{font-size:12px;color:var(--ink2);margin-top:2px}
+  .tile .n{font-size:11.5px;color:var(--muted);margin-top:6px}
+  .card{background:var(--surface);border:1px solid var(--ring);border-radius:12px;padding:18px 18px 14px}
+  .row{display:flex;align-items:center;gap:10px;margin:9px 0}
+  .row .lab{width:150px;font-size:12.5px;color:var(--ink2);flex:none;text-align:right}
+  .row .lab small{color:var(--muted)}
+  .track{flex:1;height:22px;background:linear-gradient(var(--grid),var(--grid)) left/100% 1px no-repeat;
+    position:relative;display:flex;align-items:center}
+  .bar{height:16px;border-radius:4px;display:flex;align-items:center}
+  .bar.seg{border-radius:0} .bar.seg:first-child{border-top-left-radius:4px;border-bottom-left-radius:4px}
+  .bar.seg:last-child{border-top-right-radius:4px;border-bottom-right-radius:4px}
+  .val{font-size:11.5px;color:var(--ink2);margin-left:8px;font-variant-numeric:tabular-nums}
+  .stack{display:flex;flex:1;height:20px;border-radius:4px;overflow:hidden;gap:2px;background:transparent}
+  .legend{display:flex;flex-wrap:wrap;gap:12px;margin-top:14px;font-size:12px;color:var(--ink2)}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .sw{width:11px;height:11px;border-radius:3px;flex:none}
+  table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px}
+  th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--grid)}
+  th{color:var(--muted);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.03em}
+  td.mono{font-variant-numeric:tabular-nums}
+  .pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;
+    padding:2px 8px;border-radius:20px;border:1px solid var(--ring)}
+  .pill .d{width:7px;height:7px;border-radius:50%}
+  .note{font-size:12px;color:var(--ink2);margin:10px 2px 0}
+  .foot{color:var(--muted);font-size:11.5px;margin-top:26px;border-top:1px solid var(--grid);padding-top:12px}
+  b.good{color:var(--good)} b.crit{color:var(--critical)} b.warn{color:#b9820a}
+  :root[data-theme=dark] b.warn{color:var(--warning)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>QubiHarness H3 — 통제형 게이트 효과</h1>
+      <p class="sub">어제 qwen3-coder:30b 이 H1/H2 하네스로 제출한 <b>14건</b>에 H3 게이트를 소급 적용.
+      게이트는 자율 해결률을 올리지 못한다(모델 한계). 대신 <b>위험 패치가 코드/사람에게 도달하는 것을 막는다.</b></p>
+    </div>
+    <button class="toggle" onclick="tg()">◐ 라이트/다크</button>
+  </header>
+
+  <div class="tiles">
+    <div class="tile"><div class="v" style="color:var(--critical)">5/5</div>
+      <div class="k">위험(코드파손) 패치 차단</div><div class="n">문법파손·파괴적삭제 100% REJECT</div></div>
+    <div class="tile"><div class="v" style="color:var(--good)">0</div>
+      <div class="k">위험 자동적용</div><div class="n">게이트 없으면 12건 자동신뢰됐을 것</div></div>
+    <div class="tile"><div class="v" style="color:var(--warning)">3</div>
+      <div class="k">HITL 안전 회부</div><div class="n">형식·문법 OK·테스트 미통과 후보만</div></div>
+    <div class="tile"><div class="v">0/14</div>
+      <div class="k">정답 자동해결(resolved)</div><div class="n">모델 역량 천장 — 게이트가 못 올림</div></div>
+  </div>
+
+  <h2>1 · 게이트 깔때기 — 14건이 어디서 걸리나 (싼 게이트 → 비싼 게이트)</h2>
+  <div class="card" id="funnel"></div>
+  <p class="note">대부분 <b>G0~G3(형식·문법·범위)</b>의 값싼 정적 검사에서 걸린다. 테스트(G4)까지 도달해 HITL로 회부되는 건 3건뿐.
+  AUTO_APPLY(초록)는 0 — 30B는 안전하게 자동적용할 수준의 패치를 아직 못 만든다.</p>
+
+  <h2>2 · H1 vs H2 — 실패 유형이 이동한다 (게이트는 둘 다 잡는다)</h2>
+  <div class="card" id="hh"></div>
+  <div class="legend" id="lg"></div>
+  <p class="note">H1 기본은 <b>문법파손·파괴적삭제(SYNTAX/SCOPE)</b>가 주류, H2 검증강제는 프롬프트 압박에 <b>형식붕괴(FORMAT: 산문/조각)</b>로 실패가 이동.
+  하네스 프롬프트가 실패모드를 바꿔도 게이트 레이어는 <b>두 실패군을 모두 차단</b>한다.</p>
+
+  <h2>3 · 게이트 유무 (같은 데이터, 다른 결과)</h2>
+  <div class="card" id="ba"></div>
+  <p class="note"><b class="crit">게이트 없음</b>: 에이전트가 "완료"라 한 12건을 그대로 신뢰 → 전부 불량(4건은 코드 파손).
+  <b class="good">게이트 있음</b>: 위험 자동적용 0 · 위험 100% 차단 · 애매한 것만 사람에게.</p>
+
+  <h2>4 · 인스턴스별 판정</h2>
+  <div class="card" style="padding-top:6px"><div style="overflow-x:auto"><table id="tbl"></table></div></div>
+
+  <div class="foot">데이터: runs/*/preds.json + logs/run_evaluation/*/report.json + test_output.txt(SyntaxError 계측).
+  gold 채점 resolved=True 로 파이프라인 정상 확인 → 0 resolved 는 하네스 버그가 아닌 모델 역량 결과.
+  판정 규칙: 전부통과=AUTO_APPLY · G0–G3통과·테스트실패=HITL · G0–G3실패=REJECT.</div>
+</div>
+
+<script>
+const V={AUTO:{c:'var(--good)',t:'AUTO_APPLY'},HITL:{c:'var(--warning)',t:'HITL_REVIEW'},REJ:{c:'var(--critical)',t:'REJECT'}};
+// 깔때기: 각 게이트에서 최초 차단된 수 (30B 14건)
+const FUN=[
+ {g:'G0 non-empty', s:'빈 패치', n:2, c:'var(--blue650)'},
+ {g:'G1 diff-format', s:'산문/조각', n:4, c:'var(--blue550)'},
+ {g:'G2 apply', s:'적용 실패', n:0, c:'var(--blue450)'},
+ {g:'G3 scope', s:'파괴적 삭제', n:2, c:'var(--blue450)'},
+ {g:'G3 syntax', s:'문법 파손', n:3, c:'var(--blue300)'},
+ {g:'G4 tests → HITL', s:'유효하나 오답', n:3, c:'var(--warning)'},
+ {g:'AUTO_APPLY', s:'안전 자동적용', n:0, c:'var(--good)'},
+];
+const MAX=Math.max(...FUN.map(f=>f.n));
+document.getElementById('funnel').innerHTML=FUN.map(f=>`
+ <div class="row"><div class="lab">${f.g}<br><small>${f.s}</small></div>
+ <div class="track"><div class="bar" style="width:${f.n?Math.max(f.n/MAX*100,3):0}%;background:${f.c}"></div>
+ <span class="val">${f.n}</span></div></div>`).join('');
+
+// H1 vs H2 클래스 (스택)
+const CLS=[['EMPTY','var(--c6)'],['FORMAT','var(--c2)'],['SCOPE','var(--c1)'],['SYNTAX','var(--c5)'],['WRONG','var(--c3)']];
+const HH=[
+ {h:'H1 기본', d:{EMPTY:1,FORMAT:0,SCOPE:2,SYNTAX:2,WRONG:2}},
+ {h:'H2 검증강제', d:{EMPTY:1,FORMAT:4,SCOPE:0,SYNTAX:1,WRONG:1}},
+];
+document.getElementById('hh').innerHTML=HH.map(r=>`
+ <div class="row"><div class="lab">${r.h}<br><small>7 제출</small></div>
+ <div class="stack">${CLS.map(([k,c])=>{const n=r.d[k]||0;return n?`<div class="bar seg" title="${k}: ${n}" style="flex:${n};background:${c};min-width:${n?18:0}px;justify-content:center;color:#fff;font-size:11px;font-weight:600">${n}</div>`:''}).join('')}</div></div>`).join('');
+document.getElementById('lg').innerHTML=CLS.map(([k,c])=>`<span><i class="sw" style="background:${c}"></i>${k}</span>`).join('');
+
+// before / after
+const BA=[
+ {lab:'게이트 없음', segs:[['불량 자동신뢰',12,'var(--critical)'],['(정답)',0,'var(--good)']], tot:12, note:'그중 코드파손 4'},
+ {lab:'게이트 있음', segs:[['REJECT',11,'var(--critical)'],['HITL',3,'var(--warning)'],['AUTO',0,'var(--good)']], tot:14, note:'위험 자동적용 0'},
+];
+const BMAX=14;
+document.getElementById('ba').innerHTML=BA.map(r=>`
+ <div class="row"><div class="lab">${r.lab}<br><small>${r.note}</small></div>
+ <div class="stack" style="max-width:${r.tot/BMAX*100}%">${r.segs.filter(s=>s[1]).map(([k,n,c])=>`<div class="bar seg" title="${k}: ${n}" style="flex:${n};background:${c};justify-content:center;color:#fff;font-size:11px;font-weight:600">${n}</div>`).join('')}</div></div>`).join('');
+
+// 테이블
+const ROWS=[
+ ['pilot_h1_v7_30b','H1','astropy-12907',686,'G3 scope','REJ','SCOPE','무관 함수 _compute_n_outputs 삭제'],
+ ['pilot_h1_v7_30b','H1','astropy-14182',1199,'G3 scope','REJ','SCOPE','class 선언 삭제·들여쓰기 붕괴'],
+ ['pilot_h1_v7_30b','H1','astropy-14365',0,'G0','REJ','EMPTY','빈 패치'],
+ ['h1_easy','H1','flask-4045',485,'G3 syntax','REJ','SYNTAX','assert 를 파라미터 목록에 삽입'],
+ ['h1_easy','H1','flask-4992',502,'G3 syntax','REJ','SYNTAX','시그니처 중복 → unmatched )'],
+ ['h1_easy','H1','flask-5063',932,'G4 tests','HITL','WRONG','주석 처리된 no-op(문법OK·오답)'],
+ ['h1_easy','H1','requests-1963',494,'G4 tests','HITL','WRONG','미사용 dead code(문법OK·오답)'],
+ ['pilot_h2_v1_30b','H2','astropy-12907',209,'G1 format','REJ','FORMAT','"The fix was to…" 산문'],
+ ['pilot_h2_v1_30b','H2','astropy-14182',1089,'G1 format','REJ','FORMAT','코드 조각(diff 아님)'],
+ ['pilot_h2_v1_30b','H2','astropy-14365',436,'G1 format','REJ','FORMAT','코드 조각(diff 아님)'],
+ ['h2_easy','H2','flask-4045',0,'G0','REJ','EMPTY','빈 패치'],
+ ['h2_easy','H2','flask-4992',830,'G3 syntax','REJ','SYNTAX','시그니처 중복(+mode 시도)'],
+ ['h2_easy','H2','flask-5063',177,'G1 format','REJ','FORMAT','"No changes were made…" 산문'],
+ ['h2_easy','H2','requests-1963',492,'G4 tests','HITL','WRONG','미사용 dead code(문법OK·오답)'],
+];
+const PC={REJ:V.REJ,HITL:V.HITL,AUTO:V.AUTO};
+document.getElementById('tbl').innerHTML=
+ `<thead><tr><th>run</th><th>H</th><th>instance</th><th>len</th><th>차단</th><th>판정</th><th>유형</th><th>사유</th></tr></thead><tbody>`+
+ ROWS.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td class="mono">${r[3]}</td>
+ <td>${r[4]}</td><td><span class="pill"><i class="d" style="background:${PC[r[5]].c}"></i>${PC[r[5]].t}</span></td>
+ <td>${r[6]}</td><td style="color:var(--ink2)">${r[7]}</td></tr>`).join('')+`</tbody>`;
+
+function tg(){const r=document.documentElement;r.dataset.theme=r.dataset.theme==='dark'?'light':'dark';}
+if(matchMedia&&matchMedia('(prefers-color-scheme:dark)').matches)document.documentElement.dataset.theme='dark';
+</script>
+</body>
+</html>

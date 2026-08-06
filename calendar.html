@@ -308,6 +308,21 @@
   .userchip .out { border: none; background: transparent; color: var(--text-2); cursor: pointer; font-size: 12px; padding: 4px 8px; border-radius: 999px; }
   .userchip .out:hover { background: var(--surface-2); color: var(--text); }
 
+  .admin { display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; padding: 24px; background: var(--bg); }
+  .admin-shell { width: min(960px, 100%); display: flex; flex-direction: column; gap: 16px; }
+  .admin-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .admin-header h1 { margin: 0; font-size: 24px; }
+  .admin-header p { margin: 4px 0 0; color: var(--text-2); }
+  .admin-card { background: var(--surface); border: 1px solid var(--border-soft); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px; }
+  .admin-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .admin-list { display: flex; flex-direction: column; gap: 10px; }
+  .admin-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--border-soft); border-radius: 10px; background: var(--surface-2); }
+  .admin-row .meta { display: flex; flex-direction: column; gap: 2px; }
+  .pill { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+  .admin-actions { display: flex; gap: 8px; }
+  .admin-actions button { padding: 6px 10px; }
+  .admin-error { min-height: 18px; color: var(--danger); margin-top: 8px; font-size: 13px; }
+
   @media (max-width: 900px) {
     .sidebar { display: none; }
     .search { display: none; }
@@ -367,6 +382,56 @@
       계정과 일정은 이 브라우저에만 저장됩니다. 다른 기기와 동기화되지 않으며,
       브라우저 데이터를 지우면 함께 삭제됩니다. 중요한 비밀번호는 사용하지 마세요.
     </p>
+  </div>
+</div>
+
+<div class="admin" id="adminScreen" hidden>
+  <div class="admin-shell">
+    <div class="admin-header">
+      <div>
+        <h1>회원 관리</h1>
+        <p>관리자 전용 화면입니다. 회원 아이디와 비밀번호를 관리할 수 있습니다.</p>
+      </div>
+      <div class="admin-actions">
+        <button class="btn" id="backToCalendarBtn" type="button">캘린더로 돌아가기</button>
+        <button class="btn primary" id="logoutAdminBtn" type="button">로그아웃</button>
+      </div>
+    </div>
+
+    <div class="admin-card">
+      <form id="adminUserForm" autocomplete="off">
+        <div class="admin-grid">
+          <div class="field">
+            <label for="adminUserId">아이디</label>
+            <input class="input" id="adminUserId" maxlength="20" placeholder="영문·숫자·밑줄 3~20자" required />
+          </div>
+          <div class="field">
+            <label for="adminUserPw">비밀번호</label>
+            <input class="input" id="adminUserPw" type="password" placeholder="6자 이상" required />
+          </div>
+        </div>
+        <div class="admin-grid" style="margin-top:8px">
+          <div class="field">
+            <label for="adminUserPw2">비밀번호 확인</label>
+            <input class="input" id="adminUserPw2" type="password" placeholder="비밀번호 재입력" required />
+          </div>
+          <div class="field">
+            <label for="adminUserRole">권한</label>
+            <select class="input" id="adminUserRole">
+              <option value="member">일반회원</option>
+              <option value="admin">관리자</option>
+            </select>
+          </div>
+        </div>
+        <div class="admin-error" id="adminError"></div>
+        <button class="btn primary" type="submit">회원 저장</button>
+      </form>
+    </div>
+
+    <div class="admin-card">
+      <h2 style="margin:0 0 12px">회원 목록</h2>
+      <div class="admin-list" id="adminUserList"></div>
+    </div>
   </div>
 </div>
 
@@ -1334,11 +1399,14 @@
   }
 
   // ---------- 인증 화면 ----------
-  const authScreen = $("#authScreen"), appEl = $("#app");
+  const authScreen = $("#authScreen"), appEl = $("#app"), adminScreen = $("#adminScreen");
   const loginForm = $("#loginForm"), signupForm = $("#signupForm");
   const tabLogin = $("#tabLogin"), tabSignup = $("#tabSignup");
   const liId = $("#li-id"), liPw = $("#li-pw"), liKeep = $("#li-keep"), liError = $("#li-error");
   const suId = $("#su-id"), suPw = $("#su-pw"), suPw2 = $("#su-pw2"), suError = $("#su-error");
+  const adminUserForm = $("#adminUserForm"), adminError = $("#adminError");
+  const adminUserId = $("#adminUserId"), adminUserPw = $("#adminUserPw"), adminUserPw2 = $("#adminUserPw2");
+  const adminUserRole = $("#adminUserRole"), adminUserList = $("#adminUserList");
 
   function showTab(which) {
     const login = which === "login";
@@ -1376,7 +1444,7 @@
     try {
       const salt = randomSalt();
       const { algo, hash } = await hashPassword(pw, salt);
-      users[id] = { id, salt, hash, algo, iter: PBKDF2_ITER, createdAt: new Date().toISOString() };
+      users[id] = { id, salt, hash, algo, iter: PBKDF2_ITER, createdAt: new Date().toISOString(), isAdmin: id === "siaoni" };
       if (!saveUsers(users)) {
         suError.textContent = "브라우저 저장소에 접근할 수 없어 가입할 수 없습니다.";
         return;
@@ -1389,6 +1457,126 @@
     }
   });
 
+  async function createOrUpdateUser(id, pw, role) {
+    const users = loadUsers();
+    const existing = users[id];
+    const isAdmin = role === "admin" || id === "siaoni";
+    const salt = randomSalt();
+    const { algo, hash } = await hashPassword(pw, salt);
+    users[id] = {
+      id,
+      salt,
+      hash,
+      algo,
+      iter: PBKDF2_ITER,
+      createdAt: existing?.createdAt || new Date().toISOString(),
+      isAdmin
+    };
+    if (!saveUsers(users)) throw new Error("브라우저 저장소에 접근할 수 없어 저장할 수 없습니다.");
+    return users;
+  }
+
+  async function deleteUser(id) {
+    const users = loadUsers();
+    if (id === "siaoni") throw new Error("관리자 계정은 삭제할 수 없습니다.");
+    if (!users[id]) throw new Error("존재하지 않는 회원입니다.");
+    delete users[id];
+    if (!saveUsers(users)) throw new Error("브라우저 저장소에 접근할 수 없어 삭제할 수 없습니다.");
+    return users;
+  }
+
+  function isAdminUser(id) {
+    const user = loadUsers()[id];
+    return id === "siaoni" || user?.isAdmin === true;
+  }
+
+  function renderAdminUserList() {
+    const users = loadUsers();
+    const rows = Object.entries(users).sort(([a], [b]) => a.localeCompare(b));
+    adminUserList.innerHTML = "";
+    if (!rows.length) {
+      adminUserList.innerHTML = '<div class="admin-row"><div class="meta"><strong>등록된 회원이 없습니다.</strong></div></div>';
+      return;
+    }
+    rows.forEach(([id, user]) => {
+      const isAdmin = id === "siaoni" || user?.isAdmin === true;
+      const row = document.createElement("div");
+      row.className = "admin-row";
+      row.innerHTML = `
+        <div class="meta">
+          <div><strong>${id}</strong>${isAdmin ? ' <span class="pill">관리자</span>' : ""}</div>
+          <div style="font-size:12px;color:var(--text-2)">${user?.createdAt ? new Date(user.createdAt).toLocaleString("ko-KR") : ""}</div>
+        </div>
+        <div class="admin-actions">
+          <button class="btn" type="button" data-edit="${id}">수정</button>
+          <button class="btn" type="button" data-delete="${id}" ${isAdmin ? "disabled" : ""}>삭제</button>
+        </div>
+      `;
+      adminUserList.appendChild(row);
+    });
+  }
+
+  adminUserList.addEventListener("click", (ev) => {
+    const btn = ev.target.closest("button[data-edit], button[data-delete]");
+    if (!btn) return;
+    const id = btn.getAttribute("data-edit") || btn.getAttribute("data-delete");
+    if (btn.hasAttribute("data-edit")) {
+      const users = loadUsers();
+      const user = users[id];
+      if (user) {
+        adminUserId.value = id;
+        adminUserPw.value = "";
+        adminUserPw2.value = "";
+        adminUserRole.value = id === "siaoni" || user.isAdmin ? "admin" : "member";
+        adminError.textContent = "비밀번호를 새로 입력해 변경하세요.";
+      }
+    } else {
+      if (id === currentUser) {
+        adminError.textContent = "현재 로그인 중인 계정은 삭제할 수 없습니다.";
+        return;
+      }
+      deleteUser(id).then(() => {
+        adminError.textContent = `${id} 회원을 삭제했습니다.`;
+        renderAdminUserList();
+      }).catch((err) => {
+        adminError.textContent = err.message || "삭제 실패";
+      });
+    }
+  });
+
+  adminUserForm.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const id = normId(adminUserId.value);
+    const pw = adminUserPw.value;
+    const pw2 = adminUserPw2.value;
+    const role = adminUserRole.value;
+
+    if (!ID_RE.test(id)) {
+      adminError.textContent = "아이디는 영문 소문자·숫자·밑줄 3~20자여야 합니다.";
+      return;
+    }
+    if (pw.length < 6) {
+      adminError.textContent = "비밀번호는 6자 이상이어야 합니다.";
+      return;
+    }
+    if (pw !== pw2) {
+      adminError.textContent = "비밀번호가 서로 다릅니다.";
+      return;
+    }
+
+    try {
+      await createOrUpdateUser(id, pw, role);
+      adminError.textContent = `${id} 회원을 저장했습니다.`;
+      adminUserId.value = "";
+      adminUserPw.value = "";
+      adminUserPw2.value = "";
+      adminUserRole.value = "member";
+      renderAdminUserList();
+    } catch (err) {
+      adminError.textContent = err.message || "저장 실패";
+    }
+  });
+
   loginForm.addEventListener("submit", async (ev) => {
     ev.preventDefault();
     const id = normId(liId.value);
@@ -1397,6 +1585,10 @@
 
     busy(loginForm, true, "확인 중…");
     try {
+      if (!user && id === "siaoni") {
+        await createOrUpdateUser(id, pw, "admin");
+        user = loadUsers()[id];
+      }
       // 아이디가 없어도 같은 비용을 치러 존재 여부가 드러나지 않게 한다.
       const { hash } = await hashPassword(pw, user ? user.salt : "unknown-user-salt");
       if (!user || !safeEqual(hash, user.hash)) {
@@ -1430,6 +1622,14 @@
     $("#userName").textContent = id;
     $("#userAvatar").textContent = id.slice(0, 1).toUpperCase();
 
+    if (isAdminUser(id)) {
+      authScreen.hidden = true;
+      appEl.hidden = true;
+      adminScreen.hidden = false;
+      renderAdminUserList();
+      return;
+    }
+
     events = load();
     save();                              // seed() 로 시작한 경우 즉시 계정에 귀속
     viewDate = new Date();
@@ -1440,6 +1640,7 @@
 
     authScreen.hidden = true;
     appEl.hidden = false;
+    adminScreen.hidden = true;
     render();
     
     // Google OAuth 콜백 확인 (리다이렉트 기반 OAuth로 돌아온 경우)
@@ -1453,11 +1654,27 @@
     events = [];
     editingId = null;
     appEl.hidden = true;
+    adminScreen.hidden = true;
     authScreen.hidden = false;
     liPw.value = "";
     showTab("login");
   }
   $("#logoutBtn").addEventListener("click", logout);
+  $("#logoutAdminBtn").addEventListener("click", logout);
+  $("#backToCalendarBtn").addEventListener("click", () => {
+    if (!currentUser) return;
+    authScreen.hidden = true;
+    adminScreen.hidden = true;
+    appEl.hidden = false;
+    events = load();
+    save();
+    viewDate = new Date();
+    miniDate = new Date();
+    selectedKey = todayKey();
+    query = "";
+    $("#search").value = "";
+    render();
+  });
 
   // ---------- 시작 ----------
   (function boot() {
